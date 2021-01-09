@@ -298,7 +298,7 @@ contract FeeDistribution {
         return to_distribute;
     }
 
-    @nonreentrant('lock')
+    @nonreentrant('lock') //@shun: OpenZeppelin’s ReentrancyGuard
     function claim(address _addr = msg.sender) external returns (uint256){
         /**
         *@notice Claim fees for `_addr`
@@ -455,14 +455,14 @@ contract FeeDistribution {
         assert (_coin != token);
 
         uint256 amount = ERC20(_coin).balanceOf(self);
-        Bytes[32] response = raw_call(
-            _coin,
-            concat(
+        Bytes[32] response = raw_call(//@shun: 
+            _coin, //@shun: the destination address to call to
+            concat(//@shun: the data to send the called address
                 method_id("transfer(address,uint256)"),
                 convert(emergency_return, bytes32),
                 convert(amount, bytes32),
             ),
-            max_outsize=32,
+            max_outsize=32,//@shun: the max-length for the bytes array returned from the call.
         );
         if (len(response) != 0){
             assert convert(response, bool)
