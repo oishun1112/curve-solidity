@@ -455,7 +455,7 @@ contract FeeDistribution {
         assert (_coin != token);
 
         uint256 amount = ERC20(_coin).balanceOf(self);
-        Bytes[32] response = raw_call(//@shun: 
+        Bytes[32] response = raw_call(//@shun: Calls to the specified Ethereum address. The call should pass data and may optionally send eth value (specified in wei) as well. The call must specify a gas amount to attach the call and and the outsize. Returns the data returned by the call as a bytes array with the outsize as the max length.
             _coin, //@shun: the destination address to call to
             concat(//@shun: the data to send the called address
                 method_id("transfer(address,uint256)"),
