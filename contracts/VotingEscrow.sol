@@ -342,326 +342,330 @@ contract VotingEscrow{
     }
 
 
-    @internal
-    function _deposit_for(_addr address, _value uint256, unlock_time uint256, locked_balance LockedBalance, type int128)
+    function _deposit_for(address _addr, uint256 _value, uint256 unlock_time, LockedBalance locked_balance, int128 type)internal{
         /**
-        @notice Deposit and lock tokens for a user
-        @param _addr User's wallet address
-        @param _value Amount to deposit
-        @param unlock_time New time when to unlock the tokens, or 0 if unchanged
-        @param locked_balance Previous locked amount / timestamp
+        *@notice Deposit and lock tokens for a user
+        *@param _addr User's wallet address
+        *@param _value Amount to deposit
+        *@param unlock_time New time when to unlock the tokens, or 0 if unchanged
+        *@param locked_balance Previous locked amount / timestamp
         */
-        _locked LockedBalance = locked_balance
-        supply_before uint256 = supply
+        _locked LockedBalance = locked_balance;
+        uint256 supply_before = supply;
 
-        supply = supply_before + _value
-        old_locked LockedBalance = _locked
+        supply = supply_before + _value;
+        old_locked LockedBalance = _locked;
         // Adding to existing lock, or if a lock is expired - creating a new one
-        _locked.amount += convert(_value, int128)
-        if unlock_time != 0
-            _locked.end = unlock_time
-        locked[_addr] = _locked
+        _locked.amount += convert(_value, int128);
+        if (unlock_time != 0){
+            _locked.end = unlock_time;
+        }
+        locked[_addr] = _locked;
 
         // Possibilities
         // Both old_locked.end could be current or expired (>/< block.timestamp)
         // value == 0 (extend lock) or value > 0 (add to lock or extend lock)
         // _locked.end > block.timestamp (always)
-        _checkpoint(_addr, old_locked, _locked)
+        _checkpoint(_addr, old_locked, _locked);
 
-        if _value != 0
-            assert ERC20(token).transferFrom(_addr, address(this), _value)
+        if (_value != 0){
+            assert ERC20(token).transferFrom(_addr, address(this), _value);
+        }
 
-        emit Deposit(_addr, _value, _locked.end, type, block.timestamp)
-        emit Supply(supply_before, supply_before + _value)
+        emit Deposit(_addr, _value, _locked.end, type, block.timestamp);
+        emit Supply(supply_before, supply_before + _value);
+    }
 
 
-    @external
-    function checkpoint()
+    function checkpoint()external{
         /**
-        @notice Record global data to checkpoint
+        *@notice Record global data to checkpoint
         */
-        _checkpoint(address(0), empty(LockedBalance), empty(LockedBalance))
+        _checkpoint(address(0), empty(LockedBalance), empty(LockedBalance));
+    }
 
 
-    @external
-    @nonreentrant('lock')
-    function deposit_for(_addr address, _value uint256)
+    //@shun: //@nonreentrant('lock')
+    function deposit_for(address _addr, uint256 _value)external{
         /**
-        @notice Deposit `_value` tokens for `_addr` and add to the lock
-        @dev Anyone (even a smart contract) can deposit for someone else, but
-            cannot extend their locktime and deposit for a brand new user
-        @param _addr User's wallet address
-        @param _value Amount to add to user's lock
+        *@notice Deposit `_value` tokens for `_addr` and add to the lock
+        *@dev Anyone (even a smart contract) can deposit for someone else, but
+        *    cannot extend their locktime and deposit for a brand new user
+        *@param _addr User's wallet address
+        *@param _value Amount to add to user's lock
         */
-        _locked LockedBalance = locked[_addr]
+        _locked LockedBalance = locked[_addr];
 
-        assert _value > 0  // dev need non-zero value
-        assert _locked.amount > 0, "No existing lock found"
-        assert _locked.end > block.timestamp, "Cannot add to expired lock. Withdraw"
+        assert (_value > 0);  // dev need non-zero value
+        assert (_locked.amount > 0, "No existing lock found");
+        assert (_locked.end > block.timestamp, "Cannot add to expired lock. Withdraw");
 
-        _deposit_for(_addr, _value, 0, locked[_addr], DEPOSIT_FOR_TYPE)
+        _deposit_for(_addr, _value, 0, locked[_addr], DEPOSIT_FOR_TYPE);
+    }
 
-
-    @external
-    @nonreentrant('lock')
-    function create_lock(_value uint256, _unlock_time uint256)
+    //@shun: //@nonreentrant('lock')
+    function create_lock(uint256 _value, uint256 _unlock_time)external{
         /**
-        @notice Deposit `_value` tokens for `msg.sender` and lock until `_unlock_time`
-        @param _value Amount to deposit
-        @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
+        *@notice Deposit `_value` tokens for `msg.sender` and lock until `_unlock_time`
+        *@param _value Amount to deposit
+        *@param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
         */
-        assert_not_contract(msg.sender)
-        unlock_time uint256 = (_unlock_time / WEEK) * WEEK  // Locktime is rounded down to weeks
-        _locked LockedBalance = locked[msg.sender]
+        assert_not_contract(msg.sender);
+        uint256 unlock_time = (_unlock_time / WEEK) * WEEK;  // Locktime is rounded down to weeks
+        LockedBalance _locked = locked[msg.sender];
 
-        assert _value > 0  // dev need non-zero value
-        assert _locked.amount == 0, "Withdraw old tokens first"
-        assert unlock_time > block.timestamp, "Can only lock until time in the future"
-        assert unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max"
+        assert (_value > 0 ); // dev need non-zero value
+        assert (_locked.amount == 0, "Withdraw old tokens first");
+        assert (unlock_time > block.timestamp, "Can only lock until time in the future");
+        assert (unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max");
 
-        _deposit_for(msg.sender, _value, unlock_time, _locked, CREATE_LOCK_TYPE)
+        _deposit_for(msg.sender, _value, unlock_time, _locked, CREATE_LOCK_TYPE);
+    }
 
-
-    @external
-    @nonreentrant('lock')
-    function increase_amount(_value uint256)
+    //@shun: //@nonreentrant('lock')
+    function increase_amount(uint256 _value)external{
         /**
-        @notice Deposit `_value` additional tokens for `msg.sender`
-                without modifying the unlock time
-        @param _value Amount of tokens to deposit and add to the lock
+        *@notice Deposit `_value` additional tokens for `msg.sender`
+        *        without modifying the unlock time
+        *@param _value Amount of tokens to deposit and add to the lock
         */
-        assert_not_contract(msg.sender)
-        _locked LockedBalance = locked[msg.sender]
+        assert_not_contract(msg.sender);
+        LockedBalance _locked = locked[msg.sender];
 
-        assert _value > 0  // dev need non-zero value
-        assert _locked.amount > 0, "No existing lock found"
-        assert _locked.end > block.timestamp, "Cannot add to expired lock. Withdraw"
+        assert (_value > 0);  // dev need non-zero value
+        assert (_locked.amount > 0, "No existing lock found");
+        assert (_locked.end > block.timestamp, "Cannot add to expired lock. Withdraw");
 
-        _deposit_for(msg.sender, _value, 0, _locked, INCREASE_LOCK_AMOUNT)
+        _deposit_for(msg.sender, _value, 0, _locked, INCREASE_LOCK_AMOUNT);
+    }
 
-
-    @external
-    @nonreentrant('lock')
-    function increase_unlock_time(_unlock_time uint256)
+    //@shun: //@nonreentrant('lock')
+    function increase_unlock_time(uint256 _unlock_time)external{
         /**
-        @notice Extend the unlock time for `msg.sender` to `_unlock_time`
-        @param _unlock_time New epoch time for unlocking
+        *@notice Extend the unlock time for `msg.sender` to `_unlock_time`
+        *@param _unlock_time New epoch time for unlocking
         */
-        assert_not_contract(msg.sender)
-        _locked LockedBalance = locked[msg.sender]
-        unlock_time uint256 = (_unlock_time / WEEK) * WEEK  // Locktime is rounded down to weeks
+        assert_not_contract(msg.sender); //@shun: need to convert to solidity
+        _locked LockedBalance = locked[msg.sender];
+        uint256 unlock_time = (_unlock_time / WEEK) * WEEK;  // Locktime is rounded down to weeks
 
-        assert _locked.end > block.timestamp, "Lock expired"
-        assert _locked.amount > 0, "Nothing is locked"
-        assert unlock_time > _locked.end, "Can only increase lock duration"
-        assert unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max"
+        assert (_locked.end > block.timestamp, "Lock expired");
+        assert (_locked.amount > 0, "Nothing is locked");
+        assert (unlock_time > _locked.end, "Can only increase lock duration");
+        assert (unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max");
 
-        _deposit_for(msg.sender, 0, unlock_time, _locked, INCREASE_UNLOCK_TIME)
+        _deposit_for(msg.sender, 0, unlock_time, _locked, INCREASE_UNLOCK_TIME);
+    }
 
-
-    @external
-    @nonreentrant('lock')
-    function withdraw()
+    //@shun: //@nonreentrant('lock')
+    function withdraw()external{
         /**
-        @notice Withdraw all tokens for `msg.sender`
-        @dev Only possible if the lock has expired
+        *@notice Withdraw all tokens for `msg.sender`
+        *@dev Only possible if the lock has expired
         */
-        _locked LockedBalance = locked[msg.sender]
-        assert block.timestamp >= _locked.end, "The lock didn't expire"
-        value uint256 = convert(_locked.amount, uint256)
+        LockedBalance _locked = locked[msg.sender];
+        assert( block.timestamp >= _locked.end, "The lock didn't expire");
+        uint256 value = convert(_locked.amount, uint256);
 
-        old_locked LockedBalance = _locked
-        _locked.end = 0
-        _locked.amount = 0
-        locked[msg.sender] = _locked
-        supply_before uint256 = supply
-        supply = supply_before - value
+        LockedBalance old_locked = _locked;
+        _locked.end = 0;
+        _locked.amount = 0;
+        locked[msg.sender] = _locked;
+        uint256 supply_before = supply;
+        supply = supply_before - value;
 
         // old_locked can have either expired <= timestamp or zero end
         // _locked has only 0 end
         // Both can have >= 0 amount
-        _checkpoint(msg.sender, old_locked, _locked)
+        _checkpoint(msg.sender, old_locked, _locked);
 
-        assert ERC20(token).transfer(msg.sender, value)
+        assert (ERC20(token).transfer(msg.sender, value));
 
-        emit Withdraw(msg.sender, value, block.timestamp)
-        emit Supply(supply_before, supply_before - value)
+        emit Withdraw(msg.sender, value, block.timestamp);
+        emit Supply(supply_before, supply_before - value);
+    }
 
 
     // The following ERC20/minime-compatible methods are not real balanceOf and supply!
     // They measure the weights for the purpose of voting, so they don't represent
     // real coins.
 
-    @internal
-    @view
-    function find_block_epoch(_block uint256, max_epoch uint256) returns uint256
+    function find_block_epoch(_block uint256, max_epoch uint256)internal view returns (uint256){
         /**
-        @notice Binary search to estimate timestamp for block number
-        @param _block Block to find
-        @param max_epoch Don't go beyond this epoch
-        @return Approximate timestamp for block
+        *@notice Binary search to estimate timestamp for block number
+        *@param _block Block to find
+        *@param max_epoch Don't go beyond this epoch
+        *@return Approximate timestamp for block
         */
         // Binary search
-        _min uint256 = 0
-        _max uint256 = max_epoch
-        for i in range(128)  // Will be always enough for 128-bit numbers
-            if _min >= _max
-                break
-            _mid uint256 = (_min + _max + 1) / 2
-            if point_history[_mid].blk <= _block
-                _min = _mid
-            else
-                _max = _mid - 1
-        return _min
+        uint256 _min = 0;
+        uint256 _max = max_epoch;
+        for (uint i; i <= 128; i++){  // Will be always enough for 128-bit numbers
+            if (_min >= _max){
+                break;
+            }
+            uint256 _mid = (_min + _max + 1) / 2;
+            if (point_history[_mid].blk <= _block){
+                _min = _mid;
+            }else{
+                _max = _mid - 1;
+            }
+        }
+        return _min;
+    }
 
-
-    @external
-    @view
-    function balanceOf(addr address, _t uint256 = block.timestamp) returns uint256
+    function balanceOf(address addr , uint256 _t  = block.timestamp)external view returns (uint256){
         /**
-        @notice Get the current voting power for `msg.sender`
-        @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
-        @param addr User wallet address
-        @param _t Epoch time to return voting power at
-        @return User voting power
+        *@notice Get the current voting power for `msg.sender`
+        *@dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
+        *@param addr User wallet address
+        *@param _t Epoch time to return voting power at
+        *@return User voting power
         */
-        _epoch uint256 = user_point_epoch[addr]
-        if _epoch == 0
-            return 0
-        else
-            last_point Point = user_point_history[addr][_epoch]
-            last_point.bias -= last_point.slope * convert(_t - last_point.ts, int128)
-            if last_point.bias < 0
-                last_point.bias = 0
-            return convert(last_point.bias, uint256)
+        uint256 _epoch = user_point_epoch[addr];
+        if (_epoch == 0){
+            return 0;
+        }else{
+            Point last_point = user_point_history[addr][_epoch];
+            last_point.bias -= last_point.slope * convert(_t - last_point.ts, int128);
+            if (last_point.bias < 0){
+                last_point.bias = 0;
+            }
+            return convert(last_point.bias, uint256);
+        }
+    }
 
-
-    @external
-    @view
-    function balanceOfAt(addr address, _block uint256) returns uint256
+    function balanceOfAt(address addr, uint256 _block)external view returns (uint256){
         /**
-        @notice Measure voting power of `addr` at block height `_block`
-        @dev Adheres to MiniMe `balanceOfAt` interface https//github.com/Giveth/minime
-        @param addr User's wallet address
-        @param _block Block to calculate the voting power at
-        @return Voting power
+        *@notice Measure voting power of `addr` at block height `_block`
+        *@dev Adheres to MiniMe `balanceOfAt` interface https//github.com/Giveth/minime
+        *@param addr User's wallet address
+        *@param _block Block to calculate the voting power at
+        *@return Voting power
         */
         // Copying and pasting totalSupply code because Vyper cannot pass by
         // reference yet
-        assert _block <= block.number
+        assert _block <= block.number;
 
         // Binary search
-        _min uint256 = 0
-        _max uint256 = user_point_epoch[addr]
-        for i in range(128)  // Will be always enough for 128-bit numbers
-            if _min >= _max
-                break
-            _mid uint256 = (_min + _max + 1) / 2
-            if user_point_history[addr][_mid].blk <= _block
-                _min = _mid
-            else
-                _max = _mid - 1
+        uint256 _min = 0;
+        uint256 _max = user_point_epoch[addr];
+        for(uint i; i <= 128; i++){  // Will be always enough for 128-bit numbers
+            if (_min >= _max){
+                break;
+            }
+            uint256 _mid = (_min + _max + 1) / 2;
+            if (user_point_history[addr][_mid].blk <= _block){
+                _min = _mid;
+            }else{
+                _max = _mid - 1;
+            }
+        }
 
-        upoint Point = user_point_history[addr][_min]
+        Point upoint = user_point_history[addr][_min];
 
-        max_epoch uint256 = epoch
-        _epoch uint256 = find_block_epoch(_block, max_epoch)
-        point_0 Point = point_history[_epoch]
-        d_block uint256 = 0
-        d_t uint256 = 0
-        if _epoch < max_epoch
-            point_1 Point = point_history[_epoch + 1]
-            d_block = point_1.blk - point_0.blk
-            d_t = point_1.ts - point_0.ts
-        else
-            d_block = block.number - point_0.blk
-            d_t = block.timestamp - point_0.ts
-        block_time uint256 = point_0.ts
-        if d_block != 0
-            block_time += d_t * (_block - point_0.blk) / d_block
+        uint256 max_epoch = epoch;
+        uint256 _epoch = find_block_epoch(_block, max_epoch);
+        Point point_0 = point_history[_epoch];
+        uint256 d_block = 0;
+        uint256 d_t = 0;
+        if (_epoch < max_epoch){
+            Point point_1 = point_history[_epoch + 1]
+            d_block = point_1.blk - point_0.blk;
+            d_t = point_1.ts - point_0.ts;
+        }else{
+            d_block = block.number - point_0.blk;
+            d_t = block.timestamp - point_0.ts;
+        }
+        uint256 block_time = point_0.ts;
+        if (d_block != 0){
+            block_time += d_t * (_block - point_0.blk) / d_block;
+        }
 
-        upoint.bias -= upoint.slope * convert(block_time - upoint.ts, int128)
-        if upoint.bias >= 0
-            return convert(upoint.bias, uint256)
-        else
-            return 0
+        upoint.bias -= upoint.slope * convert(block_time - upoint.ts, int128);
+        if (upoint.bias >= 0){
+            return convert(upoint.bias, uint256);
+        }else{
+            return 0;
+        }
+    }
 
-
-    @internal
-    @view
-    function supply_at(point Point, t uint256) returns uint256
+    function supply_at(Point point, uint256 t)internal view returns (uint256){
         /**
-        @notice Calculate total voting power at some point in the past
-        @param point The point (bias/slope) to start search from
-        @param t Time to calculate the total voting power at
-        @return Total voting power at that time
+        *@notice Calculate total voting power at some point in the past
+        *@param point The point (bias/slope) to start search from
+        *@param t Time to calculate the total voting power at
+        *@return Total voting power at that time
         */
-        last_point Point = point
-        t_i uint256 = (last_point.ts / WEEK) * WEEK
-        for i in range(255)
-            t_i += WEEK
-            d_slope int128 = 0
-            if t_i > t
-                t_i = t
-            else
-                d_slope = slope_changes[t_i]
-            last_point.bias -= last_point.slope * convert(t_i - last_point.ts, int128)
-            if t_i == t
-                break
-            last_point.slope += d_slope
-            last_point.ts = t_i
+        Point last_point = point;
+        uint256 t_i = (last_point.ts / WEEK) * WEEK;
+        for (uitn i; i<= 255; i++){
+            t_i += WEEK;
+            int128 d_slope = 0;
+            if (t_i > t){
+                t_i = t;
+            }else{
+                d_slope = slope_changes[t_i];
+            }
+            last_point.bias -= last_point.slope * convert(t_i - last_point.ts, int128);
+            if (t_i == t){
+                break;
+            }
+            last_point.slope += d_slope;
+            last_point.ts = t_i;
+        }
 
-        if last_point.bias < 0
-            last_point.bias = 0
-        return convert(last_point.bias, uint256)
+        if (last_point.bias < 0){
+            last_point.bias = 0;
+        }
+        return convert(last_point.bias, uint256);
+    }
 
-
-    @external
-    @view
-    function totalSupply(t uint256 = block.timestamp) returns uint256
+    function totalSupply(uint256 t = block.timestamp)external view returns (uint256){
         /**
-        @notice Calculate total voting power
-        @dev Adheres to the ERC20 `totalSupply` interface for Aragon compatibility
-        @return Total voting power
+        *@notice Calculate total voting power
+        *@dev Adheres to the ERC20 `totalSupply` interface for Aragon compatibility
+        *@return Total voting power
         */
-        _epoch uint256 = epoch
-        last_point Point = point_history[_epoch]
-        return supply_at(last_point, t)
+        uint256 _epoch = epoch;
+        Point last_point = point_history[_epoch];
+        return supply_at(last_point, t);
+    }
 
-
-    @external
-    @view
-    function totalSupplyAt(_block uint256) returns uint256
+    function totalSupplyAt(_block uint256)external view returns (uint256){
         /**
-        @notice Calculate total voting power at some point in the past
-        @param _block Block to calculate the total voting power at
-        @return Total voting power at `_block`
+        *@notice Calculate total voting power at some point in the past
+        *@param _block Block to calculate the total voting power at
+        *@return Total voting power at `_block`
         */
-        assert _block <= block.number
-        _epoch uint256 = epoch
-        target_epoch uint256 = find_block_epoch(_block, _epoch)
+        assert (_block <= block.number);
+        uint256 _epoch = epoch;
+        uint256 target_epoch = find_block_epoch(_block, _epoch);
 
-        point Point = point_history[target_epoch]
-        dt uint256 = 0
-        if target_epoch < _epoch
-            point_next Point = point_history[target_epoch + 1]
-            if point.blk != point_next.blk
-                dt = (_block - point.blk) * (point_next.ts - point.ts) / (point_next.blk - point.blk)
-        else
-            if point.blk != block.number
-                dt = (_block - point.blk) * (block.timestamp - point.ts) / (block.number - point.blk)
+        Point point = point_history[target_epoch];
+        uint256 dt = 0;
+        if (target_epoch < _epoch){
+            point_next Point = point_history[target_epoch + 1];
+            if (point.blk != point_next.blk){
+                dt = (_block - point.blk) * (point_next.ts - point.ts) / (point_next.blk - point.blk);
+            }
+        }else{
+            if (point.blk != block.number){
+                dt = (_block - point.blk) * (block.timestamp - point.ts) / (block.number - point.blk);
+            }
+        }
         // Now dt contains info on how far are we beyond point
 
-        return supply_at(point, point.ts + dt)
+        return supply_at(point, point.ts + dt);
+    }
 
 
     // Dummy methods for compatibility with Aragon
-
-    @external
-    function changeController(_newController address)
+    function changeController(_newController address)external {
         /**
-        @dev Dummy method required for Aragon compatibility
+        *@dev Dummy method required for Aragon compatibility
         */
-        assert msg.sender == controller
-        controller = _newController
+        assert (msg.sender == controller);
+        controller = _newController;
+    }
 }
