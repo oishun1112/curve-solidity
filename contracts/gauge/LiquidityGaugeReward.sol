@@ -1,3 +1,4 @@
+pragma solidity >=0.6.0 <0.8.0;
 // @version 0.2.4
 /**
 @title Staking Liquidity Gauge
