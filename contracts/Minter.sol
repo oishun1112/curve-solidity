@@ -6,21 +6,22 @@ pragma solidity >=0.6.0 <0.8.0;
 *@license MIT
 */
 
-interface LiquidityGauge{
-    // Presumably, other gauges will provide the same interfaces
-    function integrate_fraction(address addr ) view returns(uint256);
-    function user_checkpoint(address addr)nonpayable returns(bool); 
-}
-
-interface MERC20{
-    function mint(address _to, uint256 _value)nonpayable returns(bool);
-}
-
-interface GaugeController{
-    function gauge_types(address addr)view returns (int128);
-}
-
-contract Minter{
+/**
+*interface LiquidityGauge{
+*    // Presumably, other gauges will provide the same interfaces
+*    function integrate_fraction(address addr ) view returns(uint256);
+*    function user_checkpoint(address addr)nonpayable returns(bool); 
+*}
+*
+*interface MERC20{
+*    function mint(address _to, uint256 _value)nonpayable returns(bool);
+*}
+*
+*interface GaugeController{
+*    function gauge_types(address addr)view returns (int128);
+*}
+*/
+contract Minter is LiquidityGauge{
     event Minted(address indexed recipient, address gauge, uint256 minted);
 
     address public token;

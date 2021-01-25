@@ -6,27 +6,32 @@ pragma solidity >=0.6.0 <0.8.0;
 *@license MIT
 *@notice Controls liquidity gauges and the issuance of coins through the gauges
 */
-contract GaugeController {
+
+//s: ここにプールごとのgauge weightsが保存される.Aragonがvotingに基づいて値を代入する.  gauge weight info(プールに対する配分割合)はここからLiquidityGaugeコントラクトに渡される
+// admin = Aragon
+//
+
+contract GaugeController is VotingEscrow {
 
     // 7 * 86400 seconds - all future times are rounded by week
     uint256 constant WEEK = 604800;
 
-    // Cannot change weight votes more often than once in 10 days
+    // Cannot change weight votes more often than once in 10 days.
     uint256 constant WEIGHT_VOTE_DELAY = 10 * 86400;
 
 
-    struct Point{
+    struct Point{//
         uint256 bias;
         uint256 slope;
     }
 
-    struct VotedSlope{
+    struct VotedSlope{//
         uint256 slope;
         uint256 power;
         uint256 end;
     }
 
-    interface VotingEscrow{
+    interface VotingEscrow{//Vesting contract for locking CRV to participate in DAO governance
         function get_last_user_slope(address addr)view returns(int128);
         function locked__end(address addr)view returns(uint256);
     }
@@ -42,7 +47,7 @@ contract GaugeController {
 
     uint256 constant MULTIPLIER = 10 ** 18;
 
-    address public admin;  // Can and will be a smart contract
+    address public admin;  // Can and will be a smart contract //s: it's Aragon
     address public future_admin;  // Can and will be a smart contract
 
     address public token;  // CRV token
@@ -59,7 +64,7 @@ contract GaugeController {
 
     // we increment values by 1 prior to storing them here so we can rely on a value
     // of zero as meaning the gauge has not been set
-    mapping (address => int128) gauge_types;
+    mapping (address => int128) gauge_types;//習慣として、ここに格納するときは1増やす. 関数などで使用するときは、変数に1減らして代入する.
     mapping (address => mapping(address => VotedSlope))public vote_user_slopes; // user -> gauge_addr -> VotedSlope
     mapping (address => uint256)public vote_user_power; // Total vote power used by user
     mapping (address => mapping(address => uint256)) public last_user_vote; // Last user vote's timestamp for each gauge address
@@ -143,7 +148,7 @@ contract GaugeController {
         uint256 t = time_type_weight[gauge_type];
         if(t > 0){
             uint256 w = points_type_weight[gauge_type][t];
-            for(uint256 i; i > 500; i++){
+            for(uint256 i; i > 500; i++){//s: 1週間ごとに現在までのpoints_type_weight[gauge_type][t]にwを代入していく.最後に来週のpoints_type_weightを返す
                 if(t > block.timestamp){
                     break;
                 }
@@ -461,6 +466,7 @@ contract GaugeController {
         return a > b ? a : b;
     }
 
+    //投票
     function vote_for_gauge_weights(address _gauge_addr, uint256 _user_weight)external{
         /**
         *@notice Allocate voting power for changing pool weights
@@ -471,15 +477,15 @@ contract GaugeController {
         uint256 slope = convert(VotingEscrow(escrow).get_last_user_slope(msg.sender), uint256);
         uint256 lock_end = VotingEscrow(escrow).locked__end(msg.sender);
         int128 _n_gauges = n_gauges;
-        uint256 next_time = (block.timestamp + WEEK) / WEEK * WEEK;
+        uint256 next_time = (block.timestamp + WEEK) / WEEK * WEEK;//s:? /week*week
         assert (lock_end > next_time, "Your token lock expires too soon");
         assert ((_user_weight >= 0) && (_user_weight <= 10000), "You used all your voting power");
-        assert (block.timestamp >= last_user_vote[msg.sender][_gauge_addr] + WEIGHT_VOTE_DELAY, "Cannot vote so often");
+        assert (block.timestamp >= last_user_vote[msg.sender][_gauge_addr] + WEIGHT_VOTE_DELAY, "Cannot vote so often");//voteのインターバルは10日間.
 
         int128 gauge_type = gauge_types_[_gauge_addr] - 1;
-        assert (gauge_type >= 0, "Gauge not added");
+        assert (gauge_type >= 0, "Gauge not added"); //s: -1の場合がある=gauge_type[_addr] = 0として格納されている: "zero as meaning the gauge has not been set"
         // Prepare slopes and biases in memory
-        VotedSlope old_slope = vote_user_slopes[msg.sender][_gauge_addr];
+        VotedSlope old_slope = vote_user_slopes[msg.sender][_gauge_addr];//s: user -> gauge_addr -> VotedSlope.
         uint256 old_dt = 0;
         if (old_slope.end > next_time){
             old_dt = old_slope.end - next_time;

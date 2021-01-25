@@ -6,6 +6,7 @@ pragma solidity >=0.6.0 <0.8.0;
 *@author Curve Finance
 *@license MIT
 *@notice Used for measuring liquidity and insurance
+* s: ここではこのプールの時系列での各自ユーザーシェアをCRVブーストがかかったLP量で計算している。
 */
 
 //from vyper.interfaces import ERC20
@@ -32,7 +33,7 @@ pragma solidity >=0.6.0 <0.8.0;
 *    function user_point_epoch(addr address) returns uint256 view
 *    function user_point_history__ts(addr address, epoch uint256) returns uint256 view
 */
-contract LiquidityGauge {
+contract LiquidityGauge is GaugeController, Minter{ 
     event Deposit(address indexed provider, uint256 value);
     event Withdraw(address indexed provider, uint256 value);
     event UpdateLiquidityLimit(address user, uint256 original_balance, uint256 original_supply, uint256 working_balance, uint256 working_supply);
@@ -67,7 +68,7 @@ contract LiquidityGauge {
     uint256[100000000000000000000000000000] public period_timestamp;
 
     // 1e18 * ∫(rate(t) / totalSupply(t) dt) from 0 till checkpoint
-    uint256[100000000000000000000000000000] public integrate_inv_supply; // bump epoch when rate() changes
+    uint256[100000000000000000000000000000] public integrate_inv_supply; // bump epoch when rate() changes //s: Iis(t)=int(r'(t)/S(t))dt
 
     // 1e18 * ∫(rate(t) / totalSupply(t) dt) from (last_action) till checkpoint
     mapping(address => uint256)public integrate_inv_supply_of;
@@ -108,7 +109,7 @@ contract LiquidityGauge {
         admin = _admin;
     }
 
-    function _update_liquidity_limit(address addr, uint256 l, uint256 L)internal{
+    function _update_liquidity_limit(address addr, uint256 l, uint256 L)internal{//s: CRVロックのブースト計算してworking_supplyとして管理
         /**
         *@notice Calculate limits which depend on the amount of CRV token per-user.
         *        Effectively it calculates working balances to apply amplification
@@ -136,10 +137,14 @@ contract LiquidityGauge {
         emit UpdateLiquidityLimit(addr, l, L, lim, _working_supply);
     }
 
-    function _checkpoint(address addr)internal{
+    function _checkpoint(address addr)internal{//s: 全体としてIis計算 & addrのIu計算. Iis, Iuについてはwhitepaper参照.
         /**
         *@notice Checkpoint for a user
         *@param addr User address
+        *s: 全体としてIis計算: 1週間ごとにIisを計算して加算していく。Iisは時系列で増えていくもの
+        *s: addrのIu計算: (addrが前回アプデした時のIisと現在のIisの差)*addrのLPデポジット量(CRVブースト含む)でその期間のシェアを計算する
+        *s: working_supply, working_balanceがCRVブースト考慮した場合のデポジット量。 ↑の_update_liquidity_limit()が更新を担っているため、
+        *   _checkpoint()=>_update_liquidity_limit()といった形でよく呼ばれている。
         */
         address _token = crv_token;
         address _controller = controller;
@@ -149,7 +154,7 @@ contract LiquidityGauge {
         uint256 rate = inflation_rate;
         uint256 new_rate = rate;
         uint256 prev_future_epoch = future_epoch_time;
-        if (prev_future_epoch >= _period_time){
+        if (prev_future_epoch >= _period_time){//s: future_epoch_time と inflation_rate の更新
             future_epoch_time = CRV20(_token).future_epoch_time_write();
             new_rate = CRV20(_token).rate();
             inflation_rate = new_rate;
@@ -163,7 +168,7 @@ contract LiquidityGauge {
             rate = 0;  // Stop distributing inflation as soon as killed
         }
 
-        // Update integral of 1/supply
+        // Update integral of 1/supply //s:前回のアプデから１週間ごとに現在まで_integrate_inv_supplyを加算していき、 period+=1; integrate_inv_supply[period]に記録;
         if (block.timestamp > _period_time){
             uint256 prev_week_time = _period_time;
             uint256 week_time = min((_period_time + WEEK) / WEEK * WEEK, block.timestamp);
@@ -192,11 +197,11 @@ contract LiquidityGauge {
                     // The largest loss is at dt = 1
                     // Loss is 1e-9 - acceptable
                 }
-                if (week_time == block.timestamp){
+                if (week_time == block.timestamp){//
                     break;
-                prev_week_time = week_time;
-                week_time = min(week_time + WEEK, block.timestamp);
                 }
+                prev_week_time = week_time;
+                week_time = min(week_time + WEEK, block.timestamp);//１週間or数日
             }
         }
 
@@ -206,7 +211,8 @@ contract LiquidityGauge {
         integrate_inv_supply[_period] = _integrate_inv_supply;
 
         // Update user-specific integrals
-        integrate_fraction[addr] += _working_balance * (_integrate_inv_supply - integrate_inv_supply_of[addr]) / 10 ** 18;
+        //s: 個人のΔIu計算してIuに加算
+        integrate_fraction[addr] += _working_balance * (_integrate_inv_supply - integrate_inv_supply_of[addr]) / 10 ** 18;//s: CurveDAO whitepaper 4ページ目上から３個目の式
         integrate_inv_supply_of[addr] = _integrate_inv_supply;
         integrate_checkpoint_of[addr] = block.timestamp;
     }
@@ -285,7 +291,7 @@ contract LiquidityGauge {
             _update_liquidity_limit(addr, _balance, _supply);
 
             assert (ERC20(lp_token).transferFrom(msg.sender, address(this), _value));
-
+        }
         emit Deposit(addr, _value);
     }
 
@@ -339,3 +345,4 @@ contract LiquidityGauge {
         admin = _admin;
         emit ApplyOwnership(_admin);
     }
+}

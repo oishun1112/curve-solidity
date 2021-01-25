@@ -1,10 +1,12 @@
 pragma solidity >=0.6.0 <0.8.0;
 //@shun: from vyper.interfaces import ERC20
 //@shun: implements: ERC20
-contract ERC20CRV{
+import "./libraries/token/ERC20/ERC20.sol";
 
-    event Transfer(address indexed _from, address indexed _to, uint256 _value);
-    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+contract ERC20CRV is ERC20("SureToken","SURE"){
+
+    //event Transfer(address indexed _from, address indexed _to, uint256 _value); //@shun: IERCにある
+    //event Approval(address indexed _owner, address indexed _spender, uint256 _value); //@shun: IERCにある *ERC20書き換え途中--
     event UpdateMiningParameters(uint256 time, uint256 rate, uint256 supply);
     event SetMinter(address minter);
     event SetAdmin(address admin);
@@ -48,14 +50,14 @@ contract ERC20CRV{
 
     uint256 start_epoch_supply;
 
-    function __init__(string _name, string _symbol, uint256 _decimals) external { //@shun constractor?
+    constructor(string _name, string _symbol, uint256 _decimals) external { //@shun constractor?
         /**
         * @notice Contract constructor
         * @param _name Token full name
         * @param _symbol Token symbol
         * @param _decimals Number of decimals for token
         */
-
+        
         uint256 init_supply = INITIAL_SUPPLY * 10 ** _decimals;
         name = _name;
         symbol = _symbol;
