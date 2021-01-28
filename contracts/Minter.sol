@@ -21,7 +21,7 @@ pragma solidity >=0.6.0 <0.8.0;
 *    function gauge_types(address addr)view returns (int128);
 *}
 */
-contract Minter is LiquidityGauge{
+contract Minter{
     event Minted(address indexed recipient, address gauge, uint256 minted);
 
     address public token;
@@ -34,17 +34,17 @@ contract Minter is LiquidityGauge{
     mapping(address => mapping(address => bool))public allowed_to_mint_for;
 
 
-    function __init__(address _token, address _controller)external{
-        token = _token;
-        controller = _controller;
+    constructor(address _token, address _controller)external{
+        token = _token;//s: ERC20CRV
+        controller = _controller;//s: GaugeController
     }
 
     function _mint_for(address gauge_addr, address _for)internal{
         assert (GaugeController(controller).gauge_types(gauge_addr) >= 0);  // dev gauge is not added
 
         LiquidityGauge(gauge_addr).user_checkpoint(_for);
-        uint256 total_mint = LiquidityGauge(gauge_addr).integrate_fraction(_for);
-        uint256 to_mint = total_mint - minted[_for][gauge_addr];
+        uint256 total_mint = LiquidityGauge(gauge_addr).integrate_fraction(_for);//s: ユーザーに対してのトークン発行総量（発行済み含む）
+        uint256 to_mint = total_mint - minted[_for][gauge_addr];//s: 今回の発行量
 
         if (to_mint != 0){
             MERC20(token).mint(_for, to_mint);

@@ -156,7 +156,7 @@ contract LiquidityGaugeReward{
 
     function _checkpoint_rewards(address addr, bool claim_rewards)internal{
         // Update reward integrals (no gauge weights involved easy)
-        _rewarded_token address = rewarded_token;
+        address _rewarded_token = rewarded_token;
 
         uint256 d_reward = 0;
         if (claim_rewards){

@@ -77,7 +77,7 @@ contract LiquidityGauge is GaugeController, Minter{
 
     // ∫(balance * rate(t) / totalSupply(t) dt) from 0 till checkpoint
     // Units rate * t = already number of coins per address to issue
-    mapping(address => uint256)public integrate_fraction;
+    mapping(address => uint256)public integrate_fraction; //s: ユーザーに対してのトークン発行総量（発行済み含む）
 
     uint256 public inflation_rate;
 

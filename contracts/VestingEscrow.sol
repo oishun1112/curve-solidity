@@ -86,7 +86,7 @@ contract VestingEscrow{
         *@param _amount Number of tokens to transfer
         */
         assert (msg.sender == admin); // dev admin only
-        assert (ERC20(token).transferFrom(msg.sender, self, _amount));  // dev transfer failed
+        assert (ERC20(token).transferFrom(msg.sender, address(this), _amount));  // dev transfer failed
         unallocated_supply += _amount;
     }
 

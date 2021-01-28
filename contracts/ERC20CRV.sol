@@ -203,7 +203,7 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         *@param _minter Address of the minter
         */
         assert (msg.sender == admin);  // dev: admin only
-        assert (minter == ZERO_ADDRESS);  // dev: can set the minter only once, at creation
+        assert (minter == address(0));  // dev: can set the minter only once, at creation
         minter = _minter;
         emit SetMinter(_minter);
     }
@@ -245,11 +245,11 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         *@param _value The amount to be transferred
         *@return bool success
         */
-        assert(_to != ZERO_ADDRESS); // dev: transfers to 0x0 are not allowed
+        assert(_to != address(0)); // dev: transfers to 0x0 are not allowed
         balanceOf[msg.sender] -= _value;
         balanceOf[_to] += _value;
         emit Transfer(msg.sender, _to, _value);
-        return True;
+        return true;
     }
 
     function transferFrom(address _from, address _to, uint256 _value)external returns(bool){
@@ -260,14 +260,14 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         * @param _value uint256 the amount of tokens to be transferred
         * @return bool success
         */
-        assert (_to != ZERO_ADDRESS);  // dev: transfers to 0x0 are not allowed
+        assert (_to != address(0));  // dev: transfers to 0x0 are not allowed
         // NOTE: vyper does not allow underflows
         //       so the following subtraction would revert on insufficient balance
         balanceOf[_from] -= _value;
         balanceOf[_to] += _value;
         allowances[_from][msg.sender] -= _value;
         emit Transfer(_from, _to, _value);
-        return True;
+        return true;
     }
 
     function approve(address _spender, uint256 _value)external returns(bool){
@@ -283,7 +283,7 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         assert(_value == 0 || allowances[msg.sender][_spender] == 0);
         allowances[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
-        return True;
+        return true;
     }
 
     function mint(address _to, uint256 _value)external returns(bool){
@@ -295,7 +295,7 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         *@return bool success
         */
         assert(msg.sender == minter);  // dev: minter only
-        assert(_to != ZERO_ADDRESS);  // dev: zero address
+        assert(_to != address(0));  // dev: zero address
 
         if (block.timestamp >= start_epoch_time + RATE_REDUCTION_TIME){
             _update_mining_parameters();
@@ -305,9 +305,9 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         total_supply = _total_supply;
 
         balanceOf[_to] += _value;
-        emit Transfer(ZERO_ADDRESS, _to, _value);
+        emit Transfer(address(0), _to, _value);
 
-        return True;
+        return true;
     }
 
     function burn(uint256 _value)external returns(bool){
@@ -320,8 +320,8 @@ contract ERC20CRV is ERC20("SureToken","SURE"){
         balanceOf[msg.sender] -= _value;
         total_supply -= _value;
 
-        emit Transfer(msg.sender, ZERO_ADDRESS, _value);
-        return True;
+        emit Transfer(msg.sender, address(0), _value);
+        return true;
     }
 
     function set_name(string _name, string _symbol)external {

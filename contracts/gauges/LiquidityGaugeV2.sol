@@ -320,7 +320,7 @@ contract LiquidityGaugeV2 {
         integrate_checkpoint_of[addr] = block.timestamp;
     }
 
-    function user_checkpoint(address addr) returns (bool){
+    function user_checkpoint(address addr)external returns (bool){
         /**
         *@notice Record a checkpoint for `addr`
         *@param addr User address

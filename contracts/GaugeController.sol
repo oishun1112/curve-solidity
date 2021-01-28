@@ -7,9 +7,12 @@ pragma solidity >=0.6.0 <0.8.0;
 *@notice Controls liquidity gauges and the issuance of coins through the gauges
 */
 
-//s: ここにプールごとのgauge weightsが保存される.Aragonがvotingに基づいて値を代入する.  gauge weight info(プールに対する配分割合)はここからLiquidityGaugeコントラクトに渡される
+//s: ここにプールごとのgauge weights, ユーザーのvoting statusが保存される.Aragonがvotingに基づいて値を代入する.  gauge weight info(プールに対する配分割合)はここからLiquidityGaugeコントラクトに渡される
 // admin = Aragon
-//
+//s: https://etherscan.io/address/0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB#readContract
+//s:　↑でview叩きながら読むと分かりやすい
+
+//s:
 
 contract GaugeController is VotingEscrow {
 
@@ -20,7 +23,7 @@ contract GaugeController is VotingEscrow {
     uint256 constant WEIGHT_VOTE_DELAY = 10 * 86400;
 
 
-    struct Point{//
+    struct Point{//bias: 変化量
         uint256 bias;
         uint256 slope;
     }
@@ -56,7 +59,7 @@ contract GaugeController is VotingEscrow {
     // Gauge parameters
     // All numbers are "fixed point" on the basis of 1e18
     int128 public n_gauge_types;
-    int128 public n_gauges;
+    int128 public n_gauges; //s: add_gauge毎にインクリメントされていく
     mapping (int128 => string) public gauge_type_names;
 
     // Needed for enumeration
@@ -64,7 +67,7 @@ contract GaugeController is VotingEscrow {
 
     // we increment values by 1 prior to storing them here so we can rely on a value
     // of zero as meaning the gauge has not been set
-    mapping (address => int128) gauge_types;//習慣として、ここに格納するときは1増やす. 関数などで使用するときは、変数に1減らして代入する.
+    mapping (address => int128) gauge_types_;//現状LiquidityGaugeの1typeだけ. type=1として保存され, get_gauge_typeでは0で返ってくる。
     mapping (address => mapping(address => VotedSlope))public vote_user_slopes; // user -> gauge_addr -> VotedSlope
     mapping (address => uint256)public vote_user_power; // Total vote power used by user
     mapping (address => mapping(address => uint256)) public last_user_vote; // Last user vote's timestamp for each gauge address
@@ -132,7 +135,7 @@ contract GaugeController is VotingEscrow {
         *@param _addr Gauge address
         *@return Gauge type id
         */
-        int128 gauge_type = gauge_types[_addr]; //@shun: it was originally gauge_types_[_addr]; 
+        int128 gauge_type = gauge_types_[_addr];
         assert (gauge_type != 0);
 
         return gauge_type - 1;
@@ -283,7 +286,7 @@ contract GaugeController is VotingEscrow {
         /**
         *@notice Add gauge `addr` of type `gauge_type` with weight `weight`
         *@param addr Gauge address
-        *@param gauge_type Gauge type
+        *@param gauge_type Gauge type //s:LiquidityGaugeの場合は0
         *@param weight Gauge weight
         */
         assert (msg.sender == admin);
@@ -291,16 +294,16 @@ contract GaugeController is VotingEscrow {
         assert (gauge_types_[addr] == 0);  // dev: cannot add the same gauge twice
 
         int128 n = n_gauges;
-        n_gauges = n + 1;
-        gauges[n] = addr;
+        n_gauges = n + 1; //s: gaugeがn個に増えましたよ.
+        gauges[n] = addr; //s: n個目のgaugeはこのaddrですよ.
 
-        gauge_types_[addr] = gauge_type + 1;
-        uint256 next_time = (block.timestamp + WEEK) / WEEK * WEEK;
+        gauge_types_[addr] = gauge_type + 1; //s: このaddrのgauge_typeはこれですよ.インクリメントして格納
+        uint256 next_time = (block.timestamp + WEEK) / WEEK * WEEK; //s:　今から１週間後 next_time
 
-        if (weight > 0){
-            uint256 _type_weight = _get_type_weight(gauge_type);
-            uint256 _old_sum = _get_sum(gauge_type);
-            uint256 _old_total = _get_total();
+        if (weight > 0){//s: もしweightがあるならば、
+            uint256 _type_weight = _get_type_weight(gauge_type); //s: そのtypeのweight. 現状LiquidityGauge type=0だけなので,=1*1e18
+            uint256 _old_sum = _get_sum(gauge_type);//s: 
+            uint256 _old_total = _get_total();//s:
 
             points_sum[gauge_type][next_time].bias = weight + _old_sum;
             time_sum[gauge_type] = next_time;
@@ -356,7 +359,7 @@ contract GaugeController is VotingEscrow {
         }
     }
 
-    function gauge_relative_weight(address addr, uint256 time = block.timestamp)external view returns ( uint256){
+    function gauge_relative_weight(address addr, uint256 time = block.timestamp)external view returns(uint256){
         /**
         *@notice Get Gauge relative weight (not more than 1.0) normalized to 1e18
         *        (e.g. 1.0 == 1e18). Inflation which will be received by it is
@@ -368,7 +371,7 @@ contract GaugeController is VotingEscrow {
         return _gauge_relative_weight(addr, time);
     }
 
-    function gauge_relative_weight_write(address addr, uint256 time = block.timestamp)external returns (uint256){
+    function gauge_relative_weight_write(address addr, uint256 time = block.timestamp)external returns(uint256){
         /**
         *@notice Get gauge weight normalized to 1e18 and also fill all the unfilled
         *        values for type and gauge records
@@ -404,7 +407,7 @@ contract GaugeController is VotingEscrow {
 
     function add_type(_name: String[64], weight: uint256 = 0)external{
         /**
-        *@notice Add gauge type with name `_name` and weight `weight`
+        *@notice Add gauge type with name `_name` and weight `weight`　//ex. type=0, Liquidity, 1*1e18
         *@param _name Name of gauge type
         *@param weight Weight of gauge type
         */
@@ -462,25 +465,21 @@ contract GaugeController is VotingEscrow {
         _change_gauge_weight(addr, weight);
     }
 
-    function max(uint a, uint b) private pure returns (uint) {//@shun: I added
-        return a > b ? a : b;
-    }
-
     //投票
     function vote_for_gauge_weights(address _gauge_addr, uint256 _user_weight)external{
         /**
         *@notice Allocate voting power for changing pool weights
         *@param _gauge_addr Gauge which `msg.sender` votes for
-        *@param _user_weight Weight for a gauge in bps (units of 0.01%). Minimal is 0.01%. Ignored if 0
+        *@param _user_weight Weight for a gauge in bps (units of 0.01%). Minimal is 0.01%. Ignored if 0 //s: bps = basis points means %stuff
         */
         address escrow = voting_escrow;
         uint256 slope = convert(VotingEscrow(escrow).get_last_user_slope(msg.sender), uint256);
         uint256 lock_end = VotingEscrow(escrow).locked__end(msg.sender);
         int128 _n_gauges = n_gauges;
-        uint256 next_time = (block.timestamp + WEEK) / WEEK * WEEK;//s:? /week*week
+        uint256 next_time = (block.timestamp + WEEK) / WEEK * WEEK;
         assert (lock_end > next_time, "Your token lock expires too soon");
         assert ((_user_weight >= 0) && (_user_weight <= 10000), "You used all your voting power");
-        assert (block.timestamp >= last_user_vote[msg.sender][_gauge_addr] + WEIGHT_VOTE_DELAY, "Cannot vote so often");//voteのインターバルは10日間.
+        assert (block.timestamp >= last_user_vote[msg.sender][_gauge_addr] + WEIGHT_VOTE_DELAY, "Cannot vote so often");//voteのインターバルはGauge毎に10日間.
 
         int128 gauge_type = gauge_types_[_gauge_addr] - 1;
         assert (gauge_type >= 0, "Gauge not added"); //s: -1の場合がある=gauge_type[_addr] = 0として格納されている: "zero as meaning the gauge has not been set"
@@ -488,7 +487,7 @@ contract GaugeController is VotingEscrow {
         VotedSlope old_slope = vote_user_slopes[msg.sender][_gauge_addr];//s: user -> gauge_addr -> VotedSlope.
         uint256 old_dt = 0;
         if (old_slope.end > next_time){
-            old_dt = old_slope.end - next_time;
+            old_dt = old_slope.end - next_time;//s: Δt
         }
         uint256 old_bias = old_slope.slope * old_dt;
         VotedSlope new_slope = VotedSlope({
@@ -500,7 +499,7 @@ contract GaugeController is VotingEscrow {
         uint256 new_bias = new_slope.slope * new_dt;
 
         // Check and update powers (weights) used
-        uint256 power_used = vote_user_power[msg.sender];
+        uint256 power_used = vote_user_power[msg.sender];//s: vote_user_power[]: Total vote power used by user
         power_used = power_used + new_slope.power - old_slope.power;
         vote_user_power[msg.sender] = power_used;
         assert ( (power_used >= 0) and (power_used <= 10000), 'Used too much power');
@@ -547,7 +546,7 @@ contract GaugeController is VotingEscrow {
         *@param addr Gauge address
         *@return Gauge weight
         */
-        return points_weight[addr][time_weight[addr]].bias;
+        return points_weight[addr][time_weight[addr]].bias; //s: // gauge_addr -> time -> Point
     }
 
     function get_type_weight(int128 type_id)external view returns (uint256){
